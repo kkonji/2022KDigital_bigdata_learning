@@ -1,0 +1,71 @@
+df <- read.csv('hotel_bookings.csv')
+df <- df[complete.cases(df),]
+
+# 문자형 -> 범주형 변경
+df<-df%>%
+  mutate(
+    hotel=as.factor(hotel),      
+    is_canceled=as.factor(is_canceled),
+    meal=as.factor(meal),
+    country=as.factor(country),
+    market_segment=as.factor(market_segment),
+    distribution_channel=as.factor(distribution_channel),
+    is_repeated_guest=as.factor(is_repeated_guest),
+    reserved_room_type=as.factor(reserved_room_type),
+    assigned_room_type=as.factor(assigned_room_type),
+    deposit_type=as.factor(deposit_type),
+    customer_type=as.factor(customer_type),
+    reservation_status=as.factor(reservation_status),
+    agent=as.factor(agent),
+    company=as.factor(company),
+    arrival_date_day_of_month=as.factor(arrival_date_day_of_month),
+    arrival_date_month=as.factor(arrival_date_month),
+    arrival_date_year=as.factor(arrival_date_year)
+    
+  )
+# country group
+
+df%>%
+  group_by(country)%>%
+  summarise(num=n())%>%
+  arrange(desc(num))
+
+df%>%
+  filter(adr>1000)
+
+df = df%>%
+  mutate(adr = replace(adr, adr>1000, mean(adr)))
+
+df <- df[df$adr> 0, ]
+
+unique(df[df$is_repeated_guest == 1,]$country)
+
+df <- df[df$country != 'NULL',]
+dim(df)
+df[rownames(subset(df, country== 'CN')),'country'] <- 'CHN'
+unique(df[df$is_repeated_guest == 1,]$country)  # 38개국
+df_wng <- df
+
+df_wng$is_repeated_guest <- as.numeric(df_wng$is_repeated_guest)-1
+df_wng$val1 <- c(1)
+
+
+df_wng2 <- aggregate(df_wng[,c(17,33 )],by=list(country=df_wng$country) ,FUN = sum)
+
+df_wng2 <- df_wng2[df_wng2$is_repeated_guest != 0,]
+df_wng2
+df_wng2$mv <- 100 * df_wng2$is_repeated_guest / df_wng2$val1
+df_wng2[order(df_wng2$mv, decreasing = T),]
+
+
+# 지도 그리기
+world <- map_data('world')
+??maps
+europe <- world[world$region %in% c('Switzerland', 'Italy', 'Germany', 'Spain', 'Portugal', 'Greece', 'Ireland', 'Croatia', 'Hungary', 'Iceland', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Latvia', 'Monaco', 'Belarus', 'Moldova', 'North Macedonia', 'Montenegro', 'Netherlands', 'Norway', 'Poland', 'Romania','Czech Republic', 'Serbia', 'Slovakia', 'Slovenia', 'Sweden', 'Ukraine', 'Vatican', 'France', 'Albania', 'Finland', 'UK', 'Estonia', 'Denmark', 'Austria', 'Bosnia and Herzegovina', 'Kosovo', 'Netherlands'),] 
+
+europe$val <- c(1)
+europe[europe$region == 'Portugal',]$val <- c(2)
+rainbow(4)
+p <- ggplot(europe, aes(long, lat, group=group)) + 
+  geom_polygon(fill=europe$val+1, color=europe$val+1)
+p
