@@ -1,0 +1,58 @@
+---
+title: "lung_cancer"
+editor: visual
+---
+# 목표: 이항 로지스틱 회귀분석 binomial logistic regression analysis을 통해서 폐암확률 예측
+### 데이터셋 소개
+
+
+
+```{r}
+?read.csv
+df <- read.csv('survey_lung_cancer.csv', stringsAsFactors=T)
+str(df)
+```
+### 컬럼 설명
+- LUNG_CANCER는 종속변수, AGE만 수치형, 나머지 14 컬럼은 범주형
+- AGE컬럼과 LUNG_CANCER 컬럼에 대해서 이항 로지스틱 회귀분석을 진행하고, 
+- 나머지 14컬럼과 LUNG_CANCER 컬럼에 대해서 카이스퀘어 검정 진행
+
+```{r}
+# 데이터 분포 살펴보기
+par(mfrow=c(4,4))
+for (col in colnames(df))
+  barplot(table(df[[col]]), main=col)
+par(mfrow=c(1,1))
+```
+### 결측치 체크
+```{r}
+sum(is.na(df))
+```
+### 1. 로지스틱 회귀분석 실행(LUNG_CANCER ~ AGE)
+```{r}
+df$LUNG_CANCER <- factor(ifelse(df$LUNG_CANCER == 'YES',1, 0), levels=c(1,0), labels=c('yes', 'no'))
+
+# 샘플 나누기
+df.train <- df[1:150,]
+df.test <- df[151:309,]
+
+# 샘플 잘 나누어졌는지 분포 확인
+table(df$LUNG_CANCER) /309
+table(df.train$LUNG_CANCER) /150
+table(df.test$LUNG_CANCER) /159
+
+# 로지스틱 회귀분석 진행
+model <- glm(LUNG_CANCER~AGE , data =df.train, family=binomial(link='logit'))
+summary(model)
+```
+# 1. 결과
+- AIC : 111.3
+```{r}
+model.pred <- predict(model, newdata=df.test, type='response')
+model.pred
+model.pred <- factor(model.pred > 0.5, levels=c(F,T), labels=c('NO', 'YES'))
+table(model.pred)
+```
+
+### 2. 카이 스퀘어 검정
+

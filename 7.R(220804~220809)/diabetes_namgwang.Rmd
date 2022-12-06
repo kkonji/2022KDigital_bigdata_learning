@@ -1,0 +1,321 @@
+---
+title: "diabetes"
+author: "namgwang"
+date: "2022-08-08"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 목표: 당뇨병 데이터의 컬럼을 수치,범주로 나눠서 다양한 그래프를 그린다.
+- 출처: https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database
+
+```{r}
+df <- read.csv('diabetes.csv')
+head(df,10)
+```
+#### 컬럼별 정보
+|컬럼|항목|유형|설명|
+|------|---|---|---|
+|Pregnancies|임신 횟수|int(범주형)||
+|Glucose|포도당|int(수치형)||
+|BloodPressure|혈압(mm/Hg)|int(수치형)||
+|SkinThickness|팔 두께|int(수치형)|비만도 측정에 사용|
+|Insulin|인슐린(수치형)|int||
+|BMI|체질량지수(Body mass index)|double(수치형)||
+|DiabetesPedigreeFunction|가족력|double(수치형)||
+|Age|나이|int(범주형)||
+|outcome|결과|int(범주형)||
+
+### 결측치 확인
+```{r cars}
+sum(is.na(df))  
+for (col in colnames(df)) {
+  plot(df[,col], main=col)
+}
+
+sum(df$Insulin == 0)
+nrow(df)
+```
+### 알수 있는 점 ⅰ
+-  NA결측치 합이 0이라 결측치가 발견이 안된다.
+- 하지만, 몇몇 컬럼에서 0값이 관측되었는데 상식적으로 NA라고 판단할 수 있는 부분들이 있다.
+|컬럼|0의 수|유형|
+|------|---|---|
+|Glucose|5|int(범주형)|
+|BloodPressure|35|int(수치형)|
+|SkinThickness|227|int(수치형)|
+|BMI|11|double(수치형)|
+|Insulin|374|double(수치형)|
+
+- Glucose, BloodPressure, BMI가 0인 행은 모두 제거, 
+- SkinThickness, Insulin 의 0인 행은 모두 평균으로 처리
+```{r} 
+# Glucose, BloodPressure, BMI가 0인 행은 모두 제거
+df[df$Glucose == 0,] <-  NA
+df <- na.omit(df)
+df[df$BloodPressure ==0,] <- NA
+df <- na.omit(df)
+df[df$BMI == 0,] <- NA
+df <- na.omit(df)
+sum(is.na(df))
+mean(df$SkinThickness)
+df[df$SkinThickness == 0,'SkinThickness'] <- mean(df$SkinThickness)
+df[df$Insulin == 0,'Insulin'] <- mean(df$Insulin)
+head(df,10)
+```
+### 알수 있는 점 ⅱ
+- 상관계수의 절댓값이 0.7보다 큰 항목은 없다.
+- 가장 관련있는 항목이 Pregnancies와 Age -> 0.56
+
+
+#### 컬럼 생성 : 수치형 -> 범주형
+- Age (수치형) -> generation (범주형)
+  - 20, 30, 40, 50, 60, 70, 80 으로 세대별로 총 7개로 분류
+- Pregnancies (수치형) -> Preg_div (범주형)
+  - 임신 횟수가 가장 낮은 순서대로 제1사분위수, 제2사분위수, 제3사분위수 참고해서 
+  - a,b,c,d 총 4개로 분류
+```{r}
+# Age (수치형) -> generation (범주형)
+df[,'Age']
+hist(x=df[,'Age'], main='참가자 나이분포')
+table(floor(df[,'Age']/10)*10)
+df$generation <- floor(df[,'Age']/10)*10
+head(df,10)
+
+# Pregnancies (수치형) -> Preg_div (범주형)
+library(psych)
+summary(df$Pregnancies) # 1분위, 중앙값, 3분위 기준으로 4등분
+# 0 <= p <= 1, 1 < p <= 3, 3 < p <= 6, 6 < p
+#     a            b          c          d
+ab <- c(c('a','a','b','b','c','c','c') , rep('d', times=15) )
+ab
+df$Preg_div <- ab[df$Pregnancies +1]
+head(df,10)
+table(df$Pregnancies)
+```
+
+```{r}
+# scatterplot matrix 그래프 그려보기
+str(df)
+pairs.panels(df[,c(-9,-10,-11)], pch=21, bg=c('steelblue','orange')[df$Outcome +1], main= 'scatterplot matrix graph' )
+
+ 
+# 가장 유의미한 상관계수는 Age와 Pregnancies 의 관계로 0.56이 나왔다.
+# 그다음으로는 skinthickness와 bmi 의 관계로 0.55가 나온다. 
+```
+
+### 색깔 함수 정의
+- 범주형을 그래프에 넣기 위해 색깔을 입히는 함수 작성
+- str -> factor로 범주형 값들을 변환
+```{r}
+preg_col <- function(vec) {
+  ifelse(vec == 'a', 'orange', 
+         ifelse(vec == 'b', 'steelblue', 
+                ifelse(vec=='c', 'tomato', 'brown')))
+}
+head(preg_col(df$Preg_div),10)
+# str -> factor로 변환
+df$Preg_div <- factor(df$Preg_div)
+df$generation <- factor(df$generation)
+
+levels(df$Preg_div)
+levels(df$generation)
+
+gene_col <- as.numeric(df$generation) +3
+table(gene_col)
+```
+
+```{r}
+colnames(df)  
+```
+- 2,3,4,5,6,7 -> 수치형
+- 9,10,11 -> 범주형
+
+```{r, include=TRUE}
+par(mfrow = c(3,5))
+for (col in c(1:6)) {
+  for (col2 in c(1:6)) {
+    if (col > col2) {
+      col_name <- colnames(df)[2:7][col]; col_name2 <- colnames(df)[2:7][col2]
+      plot(df[,col_name] ~ df[,col_name2],  data=df, col=preg_col(df$Preg_div) ,pch=19 ,xlab= col_name2, ylab=col_name )
+    }
+  }
+}
+par(mfrow = c(1,1))
+# scatterplot 그래프를 수치형별로 15개 그려서 임신횟수를 컬러로 입혔다.
+# (a,b,c,d)-> (orange, steelblue, tomato, brown)
+```
+
+```{r, include=TRUE}
+par(mfrow = c(3,5))
+for (col in c(1:6)) {
+  for (col2 in c(1:6)) {
+    if (col > col2) {
+      col_name <- colnames(df)[2:7][col]; col_name2 <- colnames(df)[2:7][col2]
+      plot(df[,col_name] ~ df[,col_name2],  data=df, col=gene_col ,pch=19 ,xlab= col_name2, ylab=col_name )
+    }
+  }
+}
+par(mfrow = c(1,1))
+# scatterplot 그래프를 수치형별로 15개 그려서 나이를 컬러로 입혔다.
+# (20,30,40,50,60,70,80) -> (파란색, 청록색, 자홍색, 노란색, 회색, 흰색, 검은색)
+```
+
+
+
+```{r, include=TRUE}
+par(mfrow = c(3,5))
+for (col in c(1:6)) {
+  for (col2 in c(1:6)) {
+    if (col > col2) {
+      col_name <- colnames(df)[2:7][col]; col_name2 <- colnames(df)[2:7][col2]
+      plot(df[,col_name] ~ df[,col_name2],  data=df, col=Outcome+3 ,pch=19 ,xlab= col_name2, ylab=col_name )
+    }
+  }
+}
+par(mfrow = c(1,1))
+
+# scatterplot 그래프를 수치형별로 15개 그려서 Outcome을 컬러로 입혔다.
+# (0,1 ) -> (초록, 파랑)
+```
+### 알수 있는 점 ⅲ
+- 수치형 데이터 6개를 scatter plot으로 그리고,
+- 범주형 데이터 3개(임신횟수, 나이, 결과)을 색깔로 입혔다.
+- 위의 2그래프(임신횟수, 나이)에서는 유의미한 결과를 보기가 어려웠지만,
+- 아래의 그래프(결과)에서는 유의미한 결과가 보이는 듯
+  - 당뇨병 양성인 환자에게서 포도당이 높게 나왔다. (당뇨병 증상이니까 당연)
+  - BMI, 가족력 등도 높은 듯하다 .-> 평균을 계산해서 확인해보자.
+  
+  
+# 컬럼별 평균값 보기
+```{r}
+agg1 <- aggregate(df$Insulin, data=df, by = list(outcome =df$Outcome), FUN=mean)
+agg2 <- aggregate(df$Glucose, data=df, by = list(outcome =df$Outcome), FUN=mean)
+agg3 <- aggregate(df$BMI, data=df, by = list(outcome =df$Outcome), FUN=mean)
+agg4 <- aggregate(df$DiabetesPedigreeFunction, data=df, by = list(outcome =df$Outcome), FUN=mean)
+
+agg1 <- cbind(agg1, name=c('Insulin'))
+agg2 <- cbind(agg2, name=c('Glucose'))
+agg3 <- cbind(agg3, name=c('BMI'))
+agg4 <- cbind(agg4, name=c('DiabetesPedigreeFunction'))
+rbind(agg1,agg2,agg3,agg4)
+# 컬럼별 평균값 보기
+```
+
+### 히스토그램으로 평균값 비교해보기
+```{r}
+
+
+makehist <- function(col,df) {
+  df_1 <- subset(df,subset=df$Outcome ==1)
+  df_0 <- subset(df,subset=df$Outcome ==0)
+  
+  ma <- max(df_0[,col], df_1[,col])
+  mi <- min(df_0[,col], df_1[,col])
+  x_ax <- seq(mi,ma , (ma-mi)/20)
+  
+  hist1 <- hist(df_0[,col], breaks = x_ax, plot = F)
+  hist2 <- hist(df_1[,col], breaks = x_ax, plot = F)
+
+  plot(hist1, col=adjustcolor('blue', alpha=0.5),  ann=F)  # 음성
+  plot(hist2, col=adjustcolor('red', alpha=0.5), add=T)  # 양성
+}
+par(mfrow= c(1,4))
+makehist('Insulin',df)
+makehist('Glucose',df)
+makehist('BMI',df)
+makehist('DiabetesPedigreeFunction',df)
+par(mfrow= c(1,1))
+# Insulin, Glucose, BMI, DiabetesPedigreeFunction 컬럼의 히스토그램 그려서 평균값과 분포 확인
+```
+
+
+### boxplot 그래프 그리기 (범주형 - 수치형)
+```{r, include=TRUE}
+
+par(mfrow=c(2,3))
+for (col in colnames(df)[2:7]) {
+  boxplot(df[,col] ~  df[,'generation'], data=df , main = paste(col,  'generation'), xlab='generation', ylab=col)
+}
+par(mfrow=c(1,1))
+
+# boxplot(df[,'SkinThickness',] ~  df[,'generation'], data=df )
+# 세대별로 수치형 데이터에 대한 boxplot 그래프 
+```
+```{r}
+par(mfrow=c(2,3))
+for (col in colnames(df)[2:7]) {
+  boxplot(df[,col] ~  df[,'Preg_div'], data=df , main = paste(col,  'Preg_div'), xlab='Preg_div', ylab=col)
+}
+par(mfrow=c(1,1))
+```
+```{r}
+par(mfrow=c(2,3))
+for (col in colnames(df)[2:7]) {
+  boxplot(df[,col] ~  df[,'Outcome'], data=df , main = paste(col,  'Outcome'), xlab='Outcome', ylab=col)
+}
+par(mfrow=c(1,1))
+```
+## 모자이크 그래프
+- 범주형 데이터(임신횟수,나이, 결과) 끼리 비교해본다.
+
+```{r}
+mosaicplot(df$generation~df$Outcome, main='나이에 따른 당뇨병(양성/음성) 변화도', col=c('white','orange'), xlab='나이', ylab='당뇨병' )
+# 나이와 당뇨병 모자이크 그래프
+```
+
+```{r}
+mosaicplot(df$Preg_div ~df$Outcome , main='임신횟수에 따른 당뇨병(양성/음성) 변화도',col=c('white','steelblue'), xlab='임신횟수', ylab='당뇨병')
+# 임신횟수와 당뇨병 모자이크 그래프
+```
+```{r}
+mosaicplot(df$generation~df$Preg_div, main='나이에 따른 임신횟수 변화도', col=c('white','orange', 'tomato', 'steelblue'), xlab='나이', ylab='임신횟수' )
+# 나이와 당뇨병 모자이크 그래프
+```
+
+### 알수있는점 ⅳ
+- 나이가 많을수록 포도당, 혈압이 증가하는 양상
+- 나이, 임신횟수가 많을수록 당뇨병 발병률이 증가 
+  - 나이 -> 당뇨병 발병률 증가 자료 유
+  - 임신횟수는 나이에 따라 증가하는 양상 ->  당뇨병과 직접적인 인과관계가 없을 가능성 유
+  
+
+# 결론
+- 수치형과 범주형, scatter와 boxplot 그래프, 히스토그램
+- 당뇨병 양성 ~ 인슐린,포도당, bmi, 가족력 높게 나오는 경향
+
+
+
+
+### 아쉬웠던점 / 힘들었던 점
+- 결측치를 평균으로 처리하니 산점도의 모양을 해치는것 같아 미관이 좋지 않았다.
+- 그래프를 예쁘게 그리기 어려웠다.
+
+
+```{r}
+
+# df$result <- factor(ifelse(df$Outcome, 1,2), levels=c(1,2), labels=c('positive', 'negative'))
+# nrow(df)
+# nrow(df)
+# 
+# 
+# df.train <- df[c(1:362),]
+# df.test <- df[c(363:nrow(df)),]
+# mean(df.train$Outcome)   # 0.37
+# mean(df.test$Outcome)    # 0.31
+```
+
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
